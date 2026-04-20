@@ -1,7 +1,7 @@
 const express  = require('express');
 const cors     = require('cors');
 const { Pool } = require('pg');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { OpenAI } = require('openai');
 require('dotenv').config();
 
 const app  = express();
@@ -53,8 +53,10 @@ SIGUIENTE:paso concreto
 
 Responde siempre en español.`;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction: SYSTEM_PROMPT });
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey:  process.env.OPENROUTER_API_KEY,
+});
 
 app.post('/api/chat', async (req, res) => {
   const { estudiante_id, mensaje, modo, historial = [] } = req.body;
@@ -63,23 +65,28 @@ app.post('/api/chat', async (req, res) => {
   const inicio = Date.now();
   try {
     const sesion = await obtenerOCrearSesion(estudiante_id);
-    const historialGemini = historial.map(m => ({
-      role:  m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
     const mensajeEnviado = modo === 'evaluar'
       ? `Por favor evalúa el siguiente texto con la rúbrica del curso:\n\n${mensaje}`
       : mensaje;
 
-    const chat = model.startChat({ history: historialGemini });
-    const resultado = await chat.sendMessage(mensajeEnviado);
-    const textoRespuesta = resultado.response.text();
+    const mensajesAPI = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...historial.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+      { role: 'user', content: mensajeEnviado },
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model:    'openrouter/auto',
+      messages: mensajesAPI,
+    });
+
+    const textoRespuesta = completion.choices[0].message.content;
     const meta = extraerMetadatos(mensaje, textoRespuesta, modo);
     const interaccion = await guardarInteraccion({
       sesion_id: sesion.id, estudiante_id,
       mensaje_usuario: mensaje, respuesta_ia: textoRespuesta,
       modo: modo || 'dudas', tema: meta.tema, nivel: meta.nivel,
-      puntaje_total: meta.puntaje, tokens_usados: null,
+      puntaje_total: meta.puntaje, tokens_usados: completion.usage?.total_tokens || null,
       duracion_ms: Date.now() - inicio,
     });
     res.json({ respuesta: textoRespuesta, interaccion_id: interaccion.id, meta });
@@ -155,6 +162,6 @@ function extraerMetadatos(mensaje, respuesta, modo) {
 
 app.listen(port, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${port}`);
-  console.log(`   Modelo: gemini-2.5-flash`);
+  console.log(`   Modelo: OpenRouter Auto`);
   console.log(`   Base de datos: ${process.env.DB_NAME || 'asistente_db'}`);
 });
