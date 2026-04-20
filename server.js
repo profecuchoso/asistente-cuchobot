@@ -28,9 +28,6 @@ const db = new Pool({
 });
 
 // ── CLIENTE OPENROUTER ────────────────────────
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest', systemInstruction: SYSTEM_PROMPT });
-
 // ── SYSTEM PROMPT ─────────────────────────────
 const SYSTEM_PROMPT = `
 Eres un asistente educativo del curso de Argumentación para estudiantes
@@ -79,6 +76,8 @@ SIGUIENTE:un solo paso concreto a seguir
 
 Responde siempre en español. No hagas el trabajo por el estudiante.
 `.trim();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest', systemInstruction: SYSTEM_PROMPT }); SYSTEM_PROMPT });
 
 // ─────────────────────────────────────────────
 // RUTAS DE LA API
