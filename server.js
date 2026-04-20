@@ -6,9 +6,7 @@
 const express  = require('express');
 const cors     = require('cors');
 const { Pool } = require('pg');
-const { OpenAI } = require('openai');
-require('dotenv').config();
-
+const { GoogleGenerativeAI } = require('@google/generative-ai');require('dotenv').config();
 const app  = express();
 const port = process.env.PORT || 3000;
 
@@ -30,10 +28,8 @@ const db = new Pool({
 });
 
 // ── CLIENTE OPENROUTER ────────────────────────
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey:  process.env.OPENROUTER_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest', systemInstruction: SYSTEM_PROMPT });
 
 // ── SYSTEM PROMPT ─────────────────────────────
 const SYSTEM_PROMPT = `
@@ -118,12 +114,13 @@ app.post('/api/chat', async (req, res) => {
     ];
 
     // 3. Llamar a OpenRouter
-    const completion = await openai.chat.completions.create({
-      model: 'openrouter/auto',
-      messages: mensajesAPI,
-    });
-
-    const textoRespuesta = completion.choices[0].message.content;
+    const historialGemini = historial.map(m => ({
+      role:  m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+    const chat = model.startChat({ history: historialGemini });
+    const resultado = await chat.sendMessage(mensajeEnviado);
+    const textoRespuesta = resultado.response.text();
     const duracionMs     = Date.now() - inicio;
 
     // 4. Extraer metadatos
