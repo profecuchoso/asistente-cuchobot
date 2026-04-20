@@ -81,7 +81,7 @@ app.post('/api/chat', async (req, res) => {
     ];
 
     const completion = await openai.chat.completions.create({
-      model:    'openrouter/auto',
+      model:    meta-llama/llama-3.3-70b-instruct,
       messages: mensajesAPI,
     });
 
