@@ -1,12 +1,14 @@
 // ─────────────────────────────────────────────
-// server.js — Backend con OpenRouter (gratuito)
-// Stack: Node.js + Express + PostgreSQL + OpenRouter
+// server.js — Backend con Google Gemini
+// Stack: Node.js + Express + PostgreSQL + Gemini
 // ─────────────────────────────────────────────
 
 const express  = require('express');
 const cors     = require('cors');
 const { Pool } = require('pg');
-const { GoogleGenerativeAI } = require('@google/generative-ai');require('dotenv').config();
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+require('dotenv').config();
+
 const app  = express();
 const port = process.env.PORT || 3000;
 
@@ -27,7 +29,6 @@ const db = new Pool({
   password: process.env.DB_PASSWORD || '',
 });
 
-// ── CLIENTE OPENROUTER ────────────────────────
 // ── SYSTEM PROMPT ─────────────────────────────
 const SYSTEM_PROMPT = `
 Eres un asistente educativo del curso de Argumentación para estudiantes
@@ -76,8 +77,13 @@ SIGUIENTE:un solo paso concreto a seguir
 
 Responde siempre en español. No hagas el trabajo por el estudiante.
 `.trim();
+
+// ── CLIENTE GEMINI ────────────────────────────
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest', systemInstruction: SYSTEM_PROMPT }); SYSTEM_PROMPT });
+const model = genAI.getGenerativeModel({
+  model: 'gemini-1.5-flash-latest',
+  systemInstruction: SYSTEM_PROMPT,
+});
 
 // ─────────────────────────────────────────────
 // RUTAS DE LA API
@@ -94,38 +100,24 @@ app.post('/api/chat', async (req, res) => {
   const inicio = Date.now();
 
   try {
-    // 1. Sesión activa
     const sesion = await obtenerOCrearSesion(estudiante_id);
 
-    // 2. Construir mensajes para OpenRouter
-    const mensajesAPI = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...historial.map(m => ({
-        role:    m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content,
-      })),
-      {
-        role: 'user',
-        content: modo === 'evaluar'
-          ? `Por favor evalúa el siguiente texto con la rúbrica del curso:\n\n${mensaje}`
-          : mensaje,
-      },
-    ];
-
-    // 3. Llamar a OpenRouter
     const historialGemini = historial.map(m => ({
       role:  m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
+
+    const mensajeEnviado = modo === 'evaluar'
+      ? `Por favor evalúa el siguiente texto con la rúbrica del curso:\n\n${mensaje}`
+      : mensaje;
+
     const chat = model.startChat({ history: historialGemini });
     const resultado = await chat.sendMessage(mensajeEnviado);
     const textoRespuesta = resultado.response.text();
-    const duracionMs     = Date.now() - inicio;
 
-    // 4. Extraer metadatos
+    const duracionMs = Date.now() - inicio;
     const meta = extraerMetadatos(mensaje, textoRespuesta, modo);
 
-    // 5. Guardar en base de datos
     const interaccion = await guardarInteraccion({
       sesion_id:       sesion.id,
       estudiante_id,
@@ -135,11 +127,10 @@ app.post('/api/chat', async (req, res) => {
       tema:            meta.tema,
       nivel:           meta.nivel,
       puntaje_total:   meta.puntaje,
-      tokens_usados:   completion.usage?.total_tokens || null,
+      tokens_usados:   null,
       duracion_ms:     duracionMs,
     });
 
-    // 6. Responder al frontend
     res.json({
       respuesta:      textoRespuesta,
       interaccion_id: interaccion.id,
@@ -151,7 +142,6 @@ app.post('/api/chat', async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
-
 
 // ── POST /api/feedback ────────────────────────
 app.post('/api/feedback', async (req, res) => {
@@ -165,7 +155,6 @@ app.post('/api/feedback', async (req, res) => {
   );
   res.json({ ok: true });
 });
-
 
 // ── GET /api/docente/resumen ──────────────────
 app.get('/api/docente/resumen', async (req, res) => {
@@ -188,7 +177,6 @@ app.get('/api/docente/resumen', async (req, res) => {
   res.json(resultado.rows[0]);
 });
 
-
 // ── GET /api/docente/estudiantes ──────────────
 app.get('/api/docente/estudiantes', async (req, res) => {
   const resultado = await db.query(`
@@ -207,7 +195,6 @@ app.get('/api/docente/estudiantes', async (req, res) => {
   `);
   res.json(resultado.rows);
 });
-
 
 // ── GET /api/docente/estudiante/:id ───────────
 app.get('/api/docente/estudiante/:id', async (req, res) => {
@@ -243,7 +230,6 @@ app.get('/api/docente/estudiante/:id', async (req, res) => {
     temas:     temas.rows,
   });
 });
-
 
 // ─────────────────────────────────────────────
 // FUNCIONES AUXILIARES
@@ -306,6 +292,6 @@ function extraerMetadatos(mensaje, respuesta, modo) {
 // ── INICIAR SERVIDOR ──────────────────────────
 app.listen(port, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${port}`);
-  console.log(`   Modelo: Llama 3.3 via OpenRouter (gratuito)`);
+  console.log(`   Modelo: Gemini 1.5 Flash`);
   console.log(`   Base de datos: ${process.env.DB_NAME || 'asistente_db'}`);
 });
