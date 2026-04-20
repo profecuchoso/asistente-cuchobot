@@ -19,36 +19,32 @@ const db = new Pool({
   password: process.env.DB_PASSWORD || '',
 });
 
-const SYSTEM_PROMPT = `Eres un asistente educativo del curso de Argumentación para estudiantes de bachillerato (15 a 17 años). Tu función es ayudarles a comprender y mejorar sus habilidades de escritura argumentativa y análisis de textos.
+const SYSTEM_PROMPT = `Eres un asistente educativo del curso de Argumentacion para estudiantes de bachillerato de 15 a 17 anos. Tu funcion es ayudarles a comprender y mejorar sus habilidades de escritura argumentativa y analisis de textos.
 
 Solo respondes sobre estos temas del curso:
-- Ensayo argumentativo: estructura, tesis, desarrollo, conclusión
-- Análisis de textos y discursos: tesis, argumentos, falacias, retórica
-- Tipos de argumentos: deductivo, inductivo, analógico, de autoridad
+- Ensayo argumentativo: estructura, tesis, desarrollo, conclusion
+- Analisis de textos y discursos: tesis, argumentos, falacias, retorica
+- Tipos de argumentos: deductivo, inductivo, analogico, de autoridad
 - Falacias: ad hominem, hombre de paja, pendiente resbaladiza, etc.
 
-Si el tema está fuera del curso responde: "Esa pregunta está fuera del temario. Te recomiendo consultar a tu docente."
+Si el tema esta fuera del curso responde: "Esa pregunta esta fuera del temario. Te recomiendo consultar a tu docente."
 
 MODO DUDAS:
-MODO DUDAS:
-- Tono amigable y paciente. Son estudiantes de 15-17 años.
+- Tono amigable y paciente.
 - Usa ejemplos cotidianos y concretos.
-- Guía al estudiante con preguntas, no des la respuesta directa.
-- Si el estudiante pide ayuda para mejorar algo (tesis, argumento, texto),
-  dale retroalimentación conversacional, NO uses el formato de evaluación.
-  El formato ##EVAL_START## solo se usa cuando el estudiante pide
-  explícitamente "evalúa mi tarea" o "corrígeme con nota".
-- Al final incluye: [Tema: <tema> | Nivel: <básico|intermedio|avanzado>]
+- Si el estudiante pide ayuda para mejorar algo (tesis, argumento, parrafo), dale retroalimentacion conversacional con preguntas que le ayuden a mejorar. NO uses el formato de evaluacion en este caso.
+- El formato de evaluacion con puntajes solo se usa cuando el estudiante dice explicitamente "evaluame", "ponme nota", "corrije mi tarea con nota" o similares.
+- Al final de cada respuesta incluye: [Tema: <tema> | Nivel: basico o intermedio o avanzado]
 
-MODO EVALUACIÓN - usa este formato exacto:
+MODO EVALUACION - solo cuando el estudiante pide nota o evaluacion formal:
 ##EVAL_START##
 CRITERIO:Tesis clara y defendible|PUNTAJE:X/20|COMENTARIO:comentario
 CRITERIO:Calidad de argumentos|PUNTAJE:X/25|COMENTARIO:comentario
 CRITERIO:Evidencia y fuentes|PUNTAJE:X/20|COMENTARIO:comentario
 CRITERIO:Estructura y coherencia|PUNTAJE:X/20|COMENTARIO:comentario
-CRITERIO:Refutación|PUNTAJE:X/15|COMENTARIO:comentario
+CRITERIO:Refutacion|PUNTAJE:X/15|COMENTARIO:comentario
 TOTAL:XX/100
-NIVEL:Básico|En desarrollo|Sólido|Destacado
+NIVEL:Basico o En desarrollo o Solido o Destacado
 FORTALEZA:fortaleza 1
 FORTALEZA:fortaleza 2
 MEJORA:mejora 1
@@ -56,7 +52,7 @@ MEJORA:mejora 2
 SIGUIENTE:paso concreto
 ##EVAL_END##
 
-Responde siempre en español.`;
+Responde siempre en espanol.`;
 
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -71,7 +67,7 @@ app.post('/api/chat', async (req, res) => {
   try {
     const sesion = await obtenerOCrearSesion(estudiante_id);
     const mensajeEnviado = modo === 'evaluar'
-      ? `Por favor evalúa el siguiente texto con la rúbrica del curso:\n\n${mensaje}`
+      ? 'Por favor evaluame formalmente con nota este texto usando la rubrica del curso:\n\n' + mensaje
       : mensaje;
 
     const mensajesAPI = [
@@ -81,7 +77,7 @@ app.post('/api/chat', async (req, res) => {
     ];
 
     const completion = await openai.chat.completions.create({
-      model:    meta-llama/llama-3.3-70b-instruct,
+      model:    'meta-llama/llama-3.3-70b-instruct',
       messages: mensajesAPI,
     });
 
@@ -122,12 +118,34 @@ app.get('/api/docente/resumen', async (req, res) => {
 app.get('/api/docente/estudiantes', async (req, res) => {
   const r = await db.query(`
     SELECT e.id, e.nombre, e.email, COUNT(i.id) AS total_interacciones,
+    COUNT(i.id) FILTER (WHERE i.modo = 'evaluar') AS tareas_evaluadas,
     ROUND(AVG(i.puntaje_total) FILTER (WHERE i.puntaje_total IS NOT NULL), 1) AS promedio_puntaje,
-    MAX(i.created_at) AS ultima_actividad
+    MAX(i.created_at) AS ultima_actividad,
+    MODE() WITHIN GROUP (ORDER BY i.nivel) AS nivel_frecuente
     FROM estudiantes e LEFT JOIN interacciones i ON e.id = i.estudiante_id
     GROUP BY e.id, e.nombre, e.email ORDER BY total_interacciones DESC
   `);
   res.json(r.rows);
+});
+
+app.get('/api/docente/estudiante/:id', async (req, res) => {
+  const { id } = req.params;
+  const [metricas, historial, temas] = await Promise.all([
+    db.query(`
+      SELECT COUNT(*) AS total_interacciones, COUNT(*) FILTER (WHERE modo = 'evaluar') AS tareas_evaluadas,
+      ROUND(AVG(puntaje_total) FILTER (WHERE puntaje_total IS NOT NULL), 1) AS promedio_puntaje
+      FROM interacciones WHERE estudiante_id = $1
+    `, [id]),
+    db.query(`
+      SELECT id, mensaje_usuario, respuesta_ia, modo, tema, nivel, puntaje_total, feedback_util, created_at
+      FROM interacciones WHERE estudiante_id = $1 ORDER BY created_at DESC LIMIT 10
+    `, [id]),
+    db.query(`
+      SELECT tema, COUNT(*) AS cantidad FROM interacciones
+      WHERE estudiante_id = $1 AND tema IS NOT NULL GROUP BY tema ORDER BY cantidad DESC
+    `, [id]),
+  ]);
+  res.json({ metricas: metricas.rows[0], historial: historial.rows, temas: temas.rows });
 });
 
 async function obtenerOCrearSesion(estudiante_id) {
@@ -160,13 +178,13 @@ function extraerMetadatos(mensaje, respuesta, modo) {
   if (modo === 'evaluar') {
     const p = respuesta.match(/TOTAL:(\d+)\/100/);
     if (p) meta.puntaje = parseInt(p[1]);
-    if (!meta.tema) meta.tema = 'evaluación de tarea';
+    if (!meta.tema) meta.tema = 'evaluacion de tarea';
   }
   return meta;
 }
 
 app.listen(port, () => {
-  console.log(`✅ Servidor corriendo en http://localhost:${port}`);
-  console.log(`   Modelo: OpenRouter Auto`);
-  console.log(`   Base de datos: ${process.env.DB_NAME || 'asistente_db'}`);
+  console.log('Servidor corriendo en http://localhost:' + port);
+  console.log('Modelo: llama-3.3-70b via OpenRouter');
+  console.log('Base de datos: ' + (process.env.DB_NAME || 'asistente_db'));
 });
