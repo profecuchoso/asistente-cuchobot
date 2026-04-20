@@ -1,12 +1,12 @@
 // ─────────────────────────────────────────────
-// server.js — Backend con Google Gemini
-// Stack: Node.js + Express + PostgreSQL + Gemini
+// server.js — Backend con OpenRouter
+// Stack: Node.js + Express + PostgreSQL + OpenRouter
 // ─────────────────────────────────────────────
 
 const express  = require('express');
 const cors     = require('cors');
 const { Pool } = require('pg');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { OpenAI } = require('openai');
 require('dotenv').config();
 
 const app  = express();
@@ -78,11 +78,10 @@ SIGUIENTE:un solo paso concreto a seguir
 Responde siempre en español. No hagas el trabajo por el estudiante.
 `.trim();
 
-// ── CLIENTE GEMINI ────────────────────────────
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-  systemInstruction: SYSTEM_PROMPT,
+// ── CLIENTE OPENROUTER ────────────────────────
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey:  process.env.OPENROUTER_API_KEY,
 });
 
 // ─────────────────────────────────────────────
@@ -102,19 +101,25 @@ app.post('/api/chat', async (req, res) => {
   try {
     const sesion = await obtenerOCrearSesion(estudiante_id);
 
-    const historialGemini = historial.map(m => ({
-      role:  m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
     const mensajeEnviado = modo === 'evaluar'
       ? `Por favor evalúa el siguiente texto con la rúbrica del curso:\n\n${mensaje}`
       : mensaje;
 
-    const chat = model.startChat({ history: historialGemini });
-    const resultado = await chat.sendMessage(mensajeEnviado);
-    const textoRespuesta = resultado.response.text();
+    const mensajesAPI = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...historial.map(m => ({
+        role:    m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      })),
+      { role: 'user', content: mensajeEnviado },
+    ];
 
+    const completion = await openai.chat.completions.create({
+      model:    'openrouter/auto',
+      messages: mensajesAPI,
+    });
+
+    const textoRespuesta = completion.choices[0].message.content;
     const duracionMs = Date.now() - inicio;
     const meta = extraerMetadatos(mensaje, textoRespuesta, modo);
 
@@ -127,7 +132,7 @@ app.post('/api/chat', async (req, res) => {
       tema:            meta.tema,
       nivel:           meta.nivel,
       puntaje_total:   meta.puntaje,
-      tokens_usados:   null,
+      tokens_usados:   completion.usage?.total_tokens || null,
       duracion_ms:     duracionMs,
     });
 
@@ -292,6 +297,6 @@ function extraerMetadatos(mensaje, respuesta, modo) {
 // ── INICIAR SERVIDOR ──────────────────────────
 app.listen(port, () => {
   console.log(`✅ Servidor corriendo en http://localhost:${port}`);
-  console.log(`   Modelo: Gemini 1.5 Flash`);
+  console.log(`   Modelo: OpenRouter Auto`);
   console.log(`   Base de datos: ${process.env.DB_NAME || 'asistente_db'}`);
 });
