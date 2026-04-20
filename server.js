@@ -12,7 +12,11 @@ require('dotenv').config();
 const app  = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
 app.use(express.json());
 
 // ── CONEXIÓN A BASE DE DATOS ──────────────────
