@@ -43,12 +43,16 @@ MODO DUDAS:
 
 MODO EVALUACION - solo cuando el estudiante pide nota o evaluacion formal:
 ##EVAL_START##
-CRITERIO:Tesis clara y defendible|PUNTAJE:X/20|COMENTARIO:comentario
-CRITERIO:Calidad de argumentos|PUNTAJE:X/25|COMENTARIO:comentario
-CRITERIO:Evidencia y fuentes|PUNTAJE:X/20|COMENTARIO:comentario
-CRITERIO:Estructura y coherencia|PUNTAJE:X/20|COMENTARIO:comentario
-CRITERIO:Refutacion|PUNTAJE:X/15|COMENTARIO:comentario
-TOTAL:XX/100
+CRITERIO:Tesis clara y defendible|PUNTAJE:X/6|COMENTARIO:comentario
+CRITERIO:Calidad de argumentos|PUNTAJE:X/9|COMENTARIO:comentario
+CRITERIO:Evidencia y fuentes|PUNTAJE:X/6|COMENTARIO:comentario
+CRITERIO:Estructura y coherencia|PUNTAJE:X/6|COMENTARIO:comentario
+CRITERIO:Refutacion|PUNTAJE:X/3|COMENTARIO:comentario
+CRITERIO:Interacciones con CUCHOBOT|PUNTAJE:X/2|COMENTARIO:comentario
+CRITERIO:Trabajo clase a clase|PUNTAJE:X/4|COMENTARIO:comentario
+CRITERIO:Ortografia|PUNTAJE:X/2|COMENTARIO:comentario
+CRITERIO:Redaccion|PUNTAJE:X/2|COMENTARIO:comentario
+TOTAL:XX/40
 NIVEL:Basico o En desarrollo o Solido o Destacado
 FORTALEZA:fortaleza 1
 FORTALEZA:fortaleza 2
