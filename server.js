@@ -30,29 +30,27 @@ Solo respondes sobre estos temas del curso:
 Si el tema esta fuera del curso responde: "Esa pregunta esta fuera del temario. Te recomiendo consultar a tu docente."
 
 MODO DUDAS:
+- Tono amigable y paciente.
 - NUNCA expliques conceptos ni des definiciones.
 - NUNCA incluyas la respuesta dentro de una pregunta.
 - Tu unico rol es hacer preguntas abiertas que obliguen al estudiante a pensar.
-- Las preguntas deben ser neutras, sin pistas. Por ejemplo:
-  MAL: "¿No crees que tu tesis necesita una posicion mas clara?"
-  BIEN: "¿Que posicion estas defendiendo en tu texto?"
+- Las preguntas deben ser neutras, sin pistas.
 - Maximo 2 preguntas por respuesta.
-- Si el estudiante insiste en que le expliques, responde:
-  "Mi rol es ayudarte a construir tus propias ideas. ¿Que sabes tu sobre esto?"
+- Si el estudiante insiste en que le expliques, responde: "Mi rol es ayudarte a construir tus propias ideas. Que sabes tu sobre esto?"
 - Al final incluye: [Tema: <tema> | Nivel: basico o intermedio o avanzado]
 
 MODO EVALUACION - solo cuando el estudiante pide nota o evaluacion formal:
 ##EVAL_START##
-CRITERIO:Tesis clara y defendible|PUNTAJE:X/6|COMENTARIO:comentario
-CRITERIO:Calidad de argumentos|PUNTAJE:X/9|COMENTARIO:comentario
-CRITERIO:Evidencia y fuentes|PUNTAJE:X/6|COMENTARIO:comentario
-CRITERIO:Estructura y coherencia|PUNTAJE:X/6|COMENTARIO:comentario
-CRITERIO:Refutacion|PUNTAJE:X/3|COMENTARIO:comentario
-CRITERIO:Interacciones con CUCHOBOT|PUNTAJE:X/2|COMENTARIO:comentario
-CRITERIO:Trabajo clase a clase|PUNTAJE:X/4|COMENTARIO:comentario
-CRITERIO:Ortografia|PUNTAJE:X/2|COMENTARIO:comentario
-CRITERIO:Redaccion|PUNTAJE:X/2|COMENTARIO:comentario
-TOTAL:XX/40
+CRITERIO:Tesis clara y defendible|PUNTAJE:X/15|COMENTARIO:comentario
+CRITERIO:Calidad de argumentos|PUNTAJE:X/15|COMENTARIO:comentario
+CRITERIO:Evidencia y fuentes|PUNTAJE:X/15|COMENTARIO:comentario
+CRITERIO:Estructura y coherencia|PUNTAJE:X/15|COMENTARIO:comentario
+CRITERIO:Refutacion|PUNTAJE:X/10|COMENTARIO:comentario
+CRITERIO:Interacciones con CUCHOBOT|PUNTAJE:X/10|COMENTARIO:comentario
+CRITERIO:Trabajo clase a clase|PUNTAJE:X/10|COMENTARIO:comentario
+CRITERIO:Ortografia|PUNTAJE:X/5|COMENTARIO:comentario
+CRITERIO:Redaccion|PUNTAJE:X/5|COMENTARIO:comentario
+TOTAL:XX/100
 NIVEL:Basico o En desarrollo o Solido o Destacado
 FORTALEZA:fortaleza 1
 FORTALEZA:fortaleza 2
@@ -68,6 +66,29 @@ const openai = new OpenAI({
   apiKey:  process.env.OPENROUTER_API_KEY,
 });
 
+// ── POST /api/login ───────────────────────────
+// El estudiante ingresa con su correo y contraseña
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Faltan email o contraseña' });
+  }
+  try {
+    const result = await db.query(
+      'SELECT id, nombre FROM estudiantes WHERE email = $1 AND password = $2 AND activo = TRUE',
+      [email.toLowerCase().trim(), password]
+    );
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+    }
+    res.json({ id: result.rows[0].id, nombre: result.rows[0].nombre });
+  } catch (error) {
+    console.error('Error en /api/login:', error.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ── POST /api/chat ────────────────────────────
 app.post('/api/chat', async (req, res) => {
   const { estudiante_id, mensaje, modo, historial = [] } = req.body;
   if (!estudiante_id || !mensaje) return res.status(400).json({ error: 'Faltan campos' });
@@ -106,6 +127,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// ── POST /api/feedback ────────────────────────
 app.post('/api/feedback', async (req, res) => {
   const { interaccion_id, util } = req.body;
   if (!interaccion_id || util === undefined) return res.status(400).json({ error: 'Faltan campos' });
@@ -113,6 +135,7 @@ app.post('/api/feedback', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── GET /api/docente/resumen ──────────────────
 app.get('/api/docente/resumen', async (req, res) => {
   const { desde, hasta } = req.query;
   const r = await db.query(`
@@ -124,6 +147,7 @@ app.get('/api/docente/resumen', async (req, res) => {
   res.json(r.rows[0]);
 });
 
+// ── GET /api/docente/estudiantes ──────────────
 app.get('/api/docente/estudiantes', async (req, res) => {
   const r = await db.query(`
     SELECT e.id, e.nombre, e.email, COUNT(i.id) AS total_interacciones,
@@ -137,6 +161,7 @@ app.get('/api/docente/estudiantes', async (req, res) => {
   res.json(r.rows);
 });
 
+// ── GET /api/docente/estudiante/:id ───────────
 app.get('/api/docente/estudiante/:id', async (req, res) => {
   const { id } = req.params;
   const [metricas, historial, temas] = await Promise.all([
@@ -157,6 +182,7 @@ app.get('/api/docente/estudiante/:id', async (req, res) => {
   res.json({ metricas: metricas.rows[0], historial: historial.rows, temas: temas.rows });
 });
 
+// ── FUNCIONES AUXILIARES ──────────────────────
 async function obtenerOCrearSesion(estudiante_id) {
   const ex = await db.query(`
     SELECT id FROM sesiones WHERE estudiante_id = $1
