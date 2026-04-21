@@ -76,7 +76,23 @@ app.post('/api/login', async (req, res) => {
       [email.toLowerCase().trim(), password]
     );
     if (result.rows.length === 0) return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
-    res.json({ id: result.rows[0].id, nombre: result.rows[0].nombre });
+
+    const estudiante = result.rows[0];
+
+    // Cargar últimas 20 interacciones para restaurar historial
+    const historial = await db.query(`
+      SELECT mensaje_usuario, respuesta_ia, modo, created_at
+      FROM interacciones
+      WHERE estudiante_id = $1
+      ORDER BY created_at DESC
+      LIMIT 20
+    `, [estudiante.id]);
+
+    res.json({
+      id:       estudiante.id,
+      nombre:   estudiante.nombre,
+      historial: historial.rows.reverse(), // orden cronológico
+    });
   } catch (error) {
     console.error('Error en /api/login:', error.message);
     res.status(500).json({ error: 'Error interno del servidor' });
