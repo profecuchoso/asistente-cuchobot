@@ -67,23 +67,48 @@ const openai = new OpenAI({
 });
 
 // ── POST /api/login ───────────────────────────
-// El estudiante ingresa con su correo y contraseña
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Faltan email o contraseña' });
-  }
+  if (!email || !password) return res.status(400).json({ error: 'Faltan email o contraseña' });
   try {
     const result = await db.query(
       'SELECT id, nombre FROM estudiantes WHERE email = $1 AND password = $2 AND activo = TRUE',
       [email.toLowerCase().trim(), password]
     );
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
-    }
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     res.json({ id: result.rows[0].id, nombre: result.rows[0].nombre });
   } catch (error) {
     console.error('Error en /api/login:', error.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ── POST /api/cambiar-password ────────────────
+app.post('/api/cambiar-password', async (req, res) => {
+  const { estudiante_id, password_actual, password_nueva } = req.body;
+  if (!estudiante_id || !password_actual || !password_nueva) {
+    return res.status(400).json({ error: 'Faltan campos' });
+  }
+  if (password_nueva.length < 4) {
+    return res.status(400).json({ error: 'La contraseña nueva debe tener al menos 4 caracteres' });
+  }
+  try {
+    // Verificar contraseña actual
+    const check = await db.query(
+      'SELECT id FROM estudiantes WHERE id = $1 AND password = $2',
+      [estudiante_id, password_actual]
+    );
+    if (check.rows.length === 0) {
+      return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
+    }
+    // Actualizar contraseña
+    await db.query(
+      'UPDATE estudiantes SET password = $1 WHERE id = $2',
+      [password_nueva, estudiante_id]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error en /api/cambiar-password:', error.message);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
