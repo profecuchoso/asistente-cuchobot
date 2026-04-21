@@ -134,7 +134,16 @@ app.post('/api/chat', async (req, res) => {
   const { estudiante_id, mensaje, modo, historial = [] } = req.body;
   if (!estudiante_id || !mensaje) return res.status(400).json({ error: 'Faltan campos' });
 
-  const inicio = Date.now();
+  const inicio = Date.now();// Limitar evaluaciones a 3 por estudiante
+if (modo === 'evaluar') {
+  const conteo = await db.query(
+    'SELECT COUNT(*) FROM interacciones WHERE estudiante_id = $1 AND modo = $2',
+    [estudiante_id, 'evaluar']
+  );
+  if (parseInt(conteo.rows[0].count) >= 3) {
+    return res.status(403).json({ error: 'Has alcanzado el límite de 3 evaluaciones permitidas.' });
+  }
+}
   try {
     const sesion = await obtenerOCrearSesion(estudiante_id);
     const mensajeEnviado = modo === 'evaluar'
