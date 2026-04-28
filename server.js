@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type'] }));
 app.options('*', cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 const db = new Pool({
   host:     process.env.DB_HOST     || 'localhost',
@@ -167,7 +167,7 @@ if (modo === 'evaluar') {
     ];
 
     const completion = await openai.chat.completions.create({
-      model:    'meta-llama/llama-3.3-70b-instruct',
+      model:    'anthropic/claude-3.5-haiku',
       messages: mensajesAPI,
     });
 
