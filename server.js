@@ -32,24 +32,23 @@ Si el tema esta fuera del curso responde: "Esa pregunta esta fuera del temario. 
 MODO DUDAS:
 Distingue entre dos tipos de consultas:
 
-1. DUDAS DE CONTENIDO (qué argumentar, qué postura tomar, qué opinar):
+1. DUDAS DE CONTENIDO (que argumentar, que postura tomar, que opinar):
    - NUNCA des la respuesta. Solo haz preguntas abiertas y neutras.
-   - Máximo 2 preguntas por respuesta.
-   - Ejemplo: si pregunta "¿qué argumento uso?", responde con
-     "¿Qué postura quieres defender?" o "¿Qué evidencia tienes?"
+   - Maximo 2 preguntas por respuesta.
 
-2. DUDAS DE FORMA (cómo estructurar, cómo redactar, cómo desarrollar):
-   - Da una guía directa y clara sobre estructura o redacción.
-   - Puedes modelar posibilidades de desarrollo con ejemplos genéricos,
-     sin usar el contenido específico del estudiante.
-   - Ejemplo: si pregunta cómo conectar dos párrafos, muéstrale
-     conectores y estructuras posibles con un ejemplo neutro.
-   - Si es útil, combina la guía con una pregunta al final.
+2. DUDAS DE FORMA (como estructurar, como redactar, como desarrollar):
+   - Da una guia directa y clara sobre estructura o redaccion.
+   - Puedes modelar posibilidades de desarrollo con ejemplos genericos sin usar el contenido del estudiante.
+   - Si es util, combina la guia con una pregunta al final.
 
-En ambos casos: tono amigable y paciente, máximo 3 párrafos.
+IMPORTANTE EN MODO DUDAS: Si el estudiante pega un texto largo para que lo evalues, NO evalues. Responde: "Para evaluar tu tarea usa el boton Evaluar tarea en la parte superior."
+
+En ambos casos: tono amigable, maximo 3 parrafos.
 Al final incluye: [Tema: <tema> | Nivel: basico o intermedio o avanzado]
 
-MODO EVALUACION - solo cuando el estudiante pide nota o evaluacion formal:
+MODO EVALUACION:
+IMPORTANTE: SIEMPRE usa el formato ##EVAL_START## exactamente como esta definido abajo. NUNCA evalues en texto libre. El docente no podra ver el puntaje si no usas este formato exacto.
+
 ##EVAL_START##
 CRITERIO:Tesis clara y defendible|PUNTAJE:X/15|COMENTARIO:comentario
 CRITERIO:Calidad de argumentos|PUNTAJE:X/15|COMENTARIO:comentario
@@ -144,16 +143,7 @@ app.post('/api/chat', async (req, res) => {
   const { estudiante_id, mensaje, modo, historial = [] } = req.body;
   if (!estudiante_id || !mensaje) return res.status(400).json({ error: 'Faltan campos' });
 
-  const inicio = Date.now();// Limitar evaluaciones a 3 por estudiante
-if (modo === 'evaluar') {
-  const conteo = await db.query(
-    'SELECT COUNT(*) FROM interacciones WHERE estudiante_id = $1 AND modo = $2',
-    [estudiante_id, 'evaluar']
-  );
-  if (parseInt(conteo.rows[0].count) >= 3) {
-    return res.status(403).json({ error: 'Has alcanzado el límite de 3 evaluaciones permitidas.' });
-  }
-}
+  const inicio = Date.now();
   try {
     const sesion = await obtenerOCrearSesion(estudiante_id);
     const mensajeEnviado = modo === 'evaluar'
@@ -167,7 +157,7 @@ if (modo === 'evaluar') {
     ];
 
     const completion = await openai.chat.completions.create({
-      model:    'anthropic/claude-3.5-haiku',
+      model:    'meta-llama/llama-3.3-70b-instruct',
       messages: mensajesAPI,
     });
 
@@ -271,7 +261,8 @@ function extraerMetadatos(mensaje, respuesta, modo) {
   const t = respuesta.match(/\[Tema:\s*([^\|]+)\|\s*Nivel:\s*([^\]]+)\]/i);
   if (t) { meta.tema = t[1].trim(); meta.nivel = t[2].trim().toLowerCase(); }
   if (modo === 'evaluar') {
-    const p = respuesta.match(/TOTAL:(\d+)\/100/);
+    // Buscar TOTAL en múltiples formatos posibles
+    const p = respuesta.match(/TOTAL\s*[:：]?\s*\*{0,2}(\d+)\s*\/\s*100/i);
     if (p) meta.puntaje = parseInt(p[1]);
     if (!meta.tema) meta.tema = 'evaluacion de tarea';
   }
